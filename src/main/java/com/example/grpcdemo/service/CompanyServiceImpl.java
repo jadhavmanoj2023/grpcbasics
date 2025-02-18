@@ -17,10 +17,15 @@ public class CompanyServiceImpl extends CompanyServiceGrpc.CompanyServiceImplBas
     @Autowired
     private CompanyRepository companyRepository;
 
+    public CompanyServiceImpl() {
+        System.out.println("✅ CompanyService is initialized and running!");
+    }
+
     @Override
     public void getCompany(CompanyRequest request, StreamObserver<CompanyResponse> responseObserver) {
 
         Optional<CompanyModel> company = companyRepository.findById(request.getId());
+
 
         if(company.isPresent()){
           CompanyModel companyData = company.get();
@@ -48,19 +53,24 @@ public class CompanyServiceImpl extends CompanyServiceGrpc.CompanyServiceImplBas
     @Override
     public void createCompany(Company request, StreamObserver<CompanyResponse> responseObserver) {
         // Convert gRPC request to MongoDB model
-        CompanyModel company = new CompanyModel(null,request.getName(),request.getEmail(),request.getPhone(),request.getGst(),request.getRegAdd());
-        CompanyModel savedCompnay = companyRepository.save(company);
+        CompanyModel company = new CompanyModel(null,
+                request.getName(),
+                request.getEmail(),
+                request.getPhone(),
+                request.getGst(),
+                request.getRegAdd());
+        CompanyModel savedCompany = companyRepository.save(company);
 
         //conver MongoDB model to gRPC response
         CompanyResponse response = CompanyResponse.newBuilder()
                 .setMessage("Company Created Successfully")
                 .setCompany(Company.newBuilder()
-                        .setId(savedCompnay.getId())
-                        .setName(savedCompnay.getName())
-                        .setPhone(savedCompnay.getPhone())
-                        .setEmail(savedCompnay.getEmail())
-                        .setGst(savedCompnay.getGst())
-                        .setRegAdd(savedCompnay.getRegAdd())
+                        .setId(savedCompany.getId())
+                        .setName(savedCompany.getName())
+                        .setPhone(savedCompany.getPhone())
+                        .setEmail(savedCompany.getEmail())
+                        .setGst(savedCompany.getGst())
+                        .setRegAdd(savedCompany.getRegAdd())
                         .build())
                 .build();
         responseObserver.onNext(response);
