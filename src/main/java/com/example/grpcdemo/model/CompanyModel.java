@@ -1,93 +1,50 @@
 package com.example.grpcdemo.model;
 
+import com.example.grpc.company.Company;
+import jakarta.validation.constraints.NotBlank;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import jakarta.validation.constraints.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
 @Document(collection = "companies")
 public class CompanyModel {
-
     @Id
     private String id;
+
+    @NotBlank(message = "Name cannot be empty")
     private String name;
+
+    @NotBlank(message = "Email cannot be empty")
+    @Email(message = "Invalid email format")
     private String email;
+
+    @NotBlank(message = "Phone number cannot be empty")
+    @Pattern(regexp = "\\d{10}", message = "Phone number must be exactly 10 digits")
     private String phone;
+
+    @NotBlank(message = "GST cannot be empty")
+    @Pattern(regexp = "^[A-Za-z0-9]{15}$", message = "GST must be a 15-digit alphanumeric code")
     private String gst;
+
+    @NotBlank(message = "Registered address cannot be empty")
     private String regAdd;
 
-    // No-args constructor
-    public CompanyModel() {
-    }
-
-    // All-args constructor
-    public CompanyModel(String id, String name, String email, String phone, String gst, String regAdd) {
-        this.id = id;
-        this.name = name;
-        this.email = email;
-        this.phone = phone;
-        this.gst = gst;
-        this.regAdd = regAdd;
-    }
-
-    // Getters
-    public String getId() {
-        return id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public String getPhone() {
-        return phone;
-    }
-
-    public String getGst() {
-        return gst;
-    }
-
-    public String getRegAdd() {
-        return regAdd;
-    }
-
-    // Setters
-    public void setId(String id) {
-        this.id = id;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public void setPhone(String phone) {
-        this.phone = phone;
-    }
-
-    public void setGst(String gst) {
-        this.gst = gst;
-    }
-
-    public void setRegAdd(String regAdd) {
-        this.regAdd = regAdd;
-    }
-
-    // Optional: Override toString() for better readability
-    @Override
-    public String toString() {
-        return "CompanyModel{" +
-                "id='" + id + '\'' +
-                ", name='" + name + '\'' +
-                ", email='" + email + '\'' +
-                ", phone='" + phone + '\'' +
-                ", gst='" + gst + '\'' +
-                ", regAdd='" + regAdd + '\'' +
-                '}';
+    public Company toGrpcCompany() {
+        return Company.newBuilder()
+                .setId(id == null ? "" : id)
+                .setName(name)
+                .setEmail(email)
+                .setPhone(phone)
+                .setGst(gst)
+                .setRegAdd(regAdd)
+                .build();
     }
 }

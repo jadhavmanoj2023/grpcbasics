@@ -1,79 +1,106 @@
 package com.example.grpcdemo.service;
 
-import com.example.grpc.company.Company;
+import com.example.grpc.company.*;
+import com.example.grpcdemo.exception.ValidationException;
 import com.example.grpcdemo.model.CompanyModel;
-import com.example.grpc.company.CompanyRequest;
-import com.example.grpc.company.CompanyResponse;
-import com.example.grpc.company.CompanyServiceGrpc;
 import com.example.grpcdemo.repository.CompanyRepository;
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import jakarta.validation.Validator;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.util.Optional;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @GrpcService
 public class CompanyServiceImpl extends CompanyServiceGrpc.CompanyServiceImplBase {
+
     @Autowired
     private CompanyRepository companyRepository;
 
+    @Autowired
+    private Validator validator;
+
     public CompanyServiceImpl() {
-        System.out.println("✅ CompanyService is initialized and running!");
+        System.out.println("CompanyService is initialized and running!");
     }
 
     @Override
     public void getCompany(CompanyRequest request, StreamObserver<CompanyResponse> responseObserver) {
-
-        Optional<CompanyModel> company = companyRepository.findById(request.getId());
-
-
-        if(company.isPresent()){
-          CompanyModel companyData = company.get();
+        companyRepository.findById(request.getId()).ifPresentOrElse(company -> {
             CompanyResponse response = CompanyResponse.newBuilder()
                     .setMessage("Company found")
-                    .setCompany(Company.newBuilder()
-                            .setId(companyData.getId())
-                            .setName(companyData.getName())
-                            .setEmail(companyData.getEmail())
-                            .setPhone(companyData.getPhone())
-                            .setRegAdd(companyData.getRegAdd())
-                            .setGst(companyData.getGst())
-                            .build())
+                    .setCompany(company.toGrpcCompany())
                     .build();
             responseObserver.onNext(response);
-        }else {
-            responseObserver.onNext(CompanyResponse.newBuilder().setMessage("Company Not Found").build());
-        }
+        }, () -> responseObserver.onNext(CompanyResponse.newBuilder().setMessage("Company Not Found").build()));
 
         responseObserver.onCompleted();
-
-
     }
 
     @Override
     public void createCompany(Company request, StreamObserver<CompanyResponse> responseObserver) {
-        // Convert gRPC request to MongoDB model
-        CompanyModel company = new CompanyModel(null,
-                request.getName(),
-                request.getEmail(),
-                request.getPhone(),
-                request.getGst(),
-                request.getRegAdd());
-        CompanyModel savedCompany = companyRepository.save(company);
+        try {
+            System.out.println("Received createCompany request: " + request);
 
-        //conver MongoDB model to gRPC response
-        CompanyResponse response = CompanyResponse.newBuilder()
-                .setMessage("Company Created Successfully")
-                .setCompany(Company.newBuilder()
-                        .setId(savedCompany.getId())
-                        .setName(savedCompany.getName())
-                        .setPhone(savedCompany.getPhone())
-                        .setEmail(savedCompany.getEmail())
-                        .setGst(savedCompany.getGst())
-                        .setRegAdd(savedCompany.getRegAdd())
-                        .build())
-                .build();
-        responseObserver.onNext(response);
+            // Check if email already exists
+            if (companyRepository.findByEmail(request.getEmail()).isPresent()) {
+                throw new ValidationException("email", "Email is already registered");
+            }
+
+            // Check if phone number already exists
+            if (companyRepository.findByPhone(request.getPhone()).isPresent()) {
+                throw new ValidationException("phone", "Phone number is already registered");
+            }
+
+            // Create and save company
+            CompanyModel company = CompanyModel.builder()
+                    .name(request.getName())
+                    .email(request.getEmail())
+                    .phone(request.getPhone())
+                    .gst(request.getGst())
+                    .regAdd(request.getRegAdd())
+                    .build();
+
+            CompanyModel savedCompany = companyRepository.save(company);
+
+            System.out.println("Company created successfully: " + savedCompany);
+
+            // Return success response
+            CompanyResponse response = CompanyResponse.newBuilder()
+                    .setMessage("Company Created Successfully")
+                    .setCompany(savedCompany.toGrpcCompany())
+                    .build();
+
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+        } catch (ValidationException ex) {
+            System.err.println("Validation Error: " + ex.getField() + " - " + ex.getMessage());
+            responseObserver.onError(Status.ALREADY_EXISTS
+                    .withDescription(ex.getField() + ": " + ex.getMessage())
+                    .asRuntimeException());
+        } catch (Exception ex) {
+            System.err.println("Unexpected Error: " + ex.getMessage());
+            responseObserver.onError(Status.INTERNAL
+                    .withDescription("Unexpected error: " + ex.getMessage())
+                    .asRuntimeException());
+        }
+    }
+
+
+
+    @Override
+    public void getAllCompanies(EmptyRequest request, StreamObserver<CompanyListResponse> responseObserver) {
+        List<Company> grpcCompanies = companyRepository.findAll().stream()
+                .map(CompanyModel::toGrpcCompany)
+                .collect(Collectors.toList());
+
+        responseObserver.onNext(CompanyListResponse.newBuilder()
+                .setMessage(grpcCompanies.isEmpty() ? "No companies found" : "Companies retrieved successfully")
+                .addAllCompanies(grpcCompanies)
+                .build());
+
         responseObserver.onCompleted();
     }
 }
