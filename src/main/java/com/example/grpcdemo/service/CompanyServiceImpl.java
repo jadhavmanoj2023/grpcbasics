@@ -6,11 +6,13 @@ import com.example.grpcdemo.model.CompanyModel;
 import com.example.grpcdemo.repository.CompanyRepository;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @GrpcService
@@ -44,15 +46,7 @@ public class CompanyServiceImpl extends CompanyServiceGrpc.CompanyServiceImplBas
         try {
             System.out.println("Received createCompany request: " + request);
 
-            // Check if email already exists
-            if (companyRepository.findByEmail(request.getEmail()).isPresent()) {
-                throw new ValidationException("email", "Email is already registered");
-            }
 
-            // Check if phone number already exists
-            if (companyRepository.findByPhone(request.getPhone()).isPresent()) {
-                throw new ValidationException("phone", "Phone number is already registered");
-            }
 
             // Create and save company
             CompanyModel company = CompanyModel.builder()
@@ -62,6 +56,29 @@ public class CompanyServiceImpl extends CompanyServiceGrpc.CompanyServiceImplBas
                     .gst(request.getGst())
                     .regAdd(request.getRegAdd())
                     .build();
+            // Validate all fields at once
+            Set<ConstraintViolation<CompanyModel>> violations = validator.validate(company);
+            if (!violations.isEmpty()) {
+                String errorMessages = violations.stream()
+                        .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+                        .collect(Collectors.joining(", "));
+
+                System.err.println("Validation Errors: " + errorMessages);
+                responseObserver.onError(Status.INVALID_ARGUMENT
+                        .withDescription(errorMessages)
+                        .asRuntimeException());
+                return;
+            }
+
+            // Check if email already exists
+            if (companyRepository.findByEmail(request.getEmail()).isPresent()) {
+                throw new ValidationException("email", "Email is already registered");
+            }
+
+            // Check if phone number already exists
+            if (companyRepository.findByPhone(request.getPhone()).isPresent()) {
+                throw new ValidationException("phone", "Phone number is already registered");
+            }
 
             CompanyModel savedCompany = companyRepository.save(company);
 
